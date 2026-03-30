@@ -5,7 +5,13 @@ class simulation:
     def __init__(self, sim_name, box_params, All_particles, Time_Params):
         self.sim_name = sim_name
         self.box_params = box_params
-        self.box_size = [box_params[0], box_params[2], box_params[4]]  # list of box dimensions in x, y, z directions
+        # Accept either [Len_X, Units_X, Len_Y, Units_Y, Len_Z, Units_Z] or [Len_X, Len_Y, Len_Z]
+        if len(box_params) == 6:
+            self.box_size = [box_params[0], box_params[2], box_params[4]]  # list of numeric box dimensions in x, y, z directions
+        elif len(box_params) == 3:
+            self.box_size = [box_params[0], box_params[1], box_params[2]]
+        else:
+            raise ValueError("box_params must be length 3 or 6")
         self.All_particles = All_particles  # list of particle objects, will be updated during the simulation
         self.Time_Params = Time_Params  # list of time parameters, will be used to determine the total run time and time step of the simulation
 

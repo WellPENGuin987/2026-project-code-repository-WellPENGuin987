@@ -1,6 +1,11 @@
 import numpy as np
 
 
+def ChooseFile():
+    # placeholder for file input, not implemented yet
+    pass
+
+
 def SetUnits(Units):
     allowed_units_lwr = ["nm", "mim", "mm", "cm", "m"]
     if Units.lower() in allowed_units_lwr:
@@ -131,7 +136,10 @@ def InitialiseBox():
         )
         print(Init_Box)
 
-        if len(Init_Box) != 6:
+        if Init_Box == ["F"] or Init_Box == ["f"]:
+            # read paramaters from file, not implemented yet
+            pass
+        elif len(Init_Box) != 6:
             print("Invalid number of dimensions and units")
         else:
             try:
@@ -162,7 +170,10 @@ def InitialiseTime():
             .split(",")
         )
 
-        if len(Init_Time) != 6:
+        if Init_Time == ["F"] or Init_Time == ["f"]:
+            # read paramaters from file, not implemented yet
+            pass
+        elif len(Init_Time) != 6:
             print("Invalid number of dimensions and units")
         else:
             try:
@@ -200,6 +211,9 @@ def InitialiseParticles():
         if Init_Particles == ["X"] or Init_Particles == ["x"]:
             print("Initialisation complete")
             break
+        elif Init_Particles == ["F"] or Init_Particles == ["f"]:
+            # read paramaters from file, not implemented yet
+            pass
         else:
             print(f"{len(Init_Particles)} parameters inputted:\n{Init_Particles}")
         if len(Init_Particles) % 8 == 0:

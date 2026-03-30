@@ -11,7 +11,17 @@ class Coordinate_dist_3D:
     """Base class for 3D position distributions. Subclasses must implement the generate() method."""
 
     def __init__(self, box_size, N):
-        self.len_X, self.len_Y, self.len_Z = box_size
+        # Accept either [Len_X, Units_X, Len_Y, Units_Y, Len_Z, Units_Z] or [Len_X, Len_Y, Len_Z]
+        if len(box_size) == 6:
+            self.len_X = float(box_size[0])
+            self.len_Y = float(box_size[2])
+            self.len_Z = float(box_size[4])
+        elif len(box_size) == 3:
+            self.len_X = float(box_size[0])
+            self.len_Y = float(box_size[1])
+            self.len_Z = float(box_size[2])
+        else:
+            raise ValueError("box_size must be a length-3 numeric tuple/list or length-6 [len,unit,len,unit,len,unit]")
         self.N = N
 
     def generate(self):
