@@ -1,9 +1,95 @@
 import numpy as np
 
 
+def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
+    """Save the current initialization parameters in text format."""
+    if filename is None:
+        filename = "initialization_saved.txt"
+
+    if isinstance(filename, str) and filename.strip().lower() in ["n", "no", "none"]:
+        print("Skipping save as requested.")
+        return
+
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write("# Box parameters: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z\n")
+        f.write(",".join([str(Box_Params[0]), str(Box_Params[1]), str(Box_Params[2]), str(Box_Params[3]), str(Box_Params[4]), str(Box_Params[5])]) + "\n")
+        f.write("# Time parameters: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt\n")
+        f.write(",".join([str(Time_Params[0]), str(Time_Params[1]), str(Time_Params[2]), str(Time_Params[3]), str(Time_Params[4]), str(Time_Params[5])]) + "\n")
+        f.write("# Particle lines: type,N,m,D,r,Temp,Pos_dist,Vel_dist\n")
+        for p in Sep_Particles:
+            f.write(",".join([str(p[0]), str(p[1]), str(p[2]), str(p[3]), str(p[5]), str(p[6]), str(p[7]), str(p[8])]) + "\n")
+
+    print(f"Initialization values saved to {filename}")
+
+
 def ChooseFile():
-    # placeholder for file input, not implemented yet
-    pass
+    """Load initialization parameters from a CSV-like text file."""
+    import os
+
+    while True:
+        file_path = input("Enter path to initialization file (or X to cancel): \n").strip()
+        if file_path.lower() in ["x", "q", "quit", "exit"]:
+            raise KeyboardInterrupt("Initialization from file canceled")
+
+        if not os.path.isfile(file_path):
+            print("File does not exist. Please provide a valid path.")
+            continue
+
+        with open(file_path, "r") as f:
+            lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+
+        if len(lines) < 3:
+            print("Initialization file must include box, time, and at least one particle line.")
+            continue
+
+        try:
+            box_items = [item.strip() for item in lines[0].split(",")]
+            if len(box_items) != 6:
+                raise ValueError("First line must have 6 values: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z")
+            Box_Params = [
+                np.longdouble(str(box_items[0])),
+                SetUnits(box_items[1]),
+                np.longdouble(str(box_items[2])),
+                SetUnits(box_items[3]),
+                np.longdouble(str(box_items[4])),
+                SetUnits(box_items[5]),
+            ]
+
+            time_items = [item.strip() for item in lines[1].split(",")]
+            if len(time_items) != 6:
+                raise ValueError("Second line must have 6 values: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt")
+            Time_Params = [
+                np.longdouble(str(time_items[0])),
+                SetTime(time_items[1]),
+                np.longdouble(str(time_items[2])),
+                SetTime(time_items[3]),
+                np.longdouble(str(time_items[4])),
+                SetTime(time_items[5]),
+            ]
+
+            Sep_Particles = []
+            for line in lines[2:]:
+                part_items = [item.strip() for item in line.split(",")]
+                if len(part_items) != 8:
+                    raise ValueError("Particle lines must have 8 values: type,N,m,D,r,Temp,Pos_dist,Vel_dist")
+                p_type = part_items[0]
+                p_N = int(part_items[1])
+                p_m = np.longdouble(str(part_items[2]))
+                p_D = int(part_items[3])
+                p_r = np.longdouble(str(part_items[4]))
+                p_temp = np.longdouble(str(part_items[5]))
+                p_pos = setPosDistType(int(part_items[6]))
+                p_vel = setVelDistType(int(part_items[7]))
+
+                inertia_data = setMomentsOfInertia(p_D)
+                Sep_Particles.append([p_type, p_N, p_m, p_D, inertia_data, p_r, p_temp, p_pos, p_vel])
+
+            return Box_Params, Time_Params, Sep_Particles
+
+        except Exception as e:
+            print("Failed to parse initialization file:", e)
+            print("Please fix the file or choose another file.")
+            continue
 
 
 def SetUnits(Units):
@@ -137,8 +223,8 @@ def InitialiseBox():
         print(Init_Box)
 
         if Init_Box == ["F"] or Init_Box == ["f"]:
-            # read paramaters from file, not implemented yet
-            pass
+            Box_Params, _, _ = ChooseFile()
+            return Box_Params
         elif len(Init_Box) != 6:
             print("Invalid number of dimensions and units")
         else:
@@ -171,8 +257,8 @@ def InitialiseTime():
         )
 
         if Init_Time == ["F"] or Init_Time == ["f"]:
-            # read paramaters from file, not implemented yet
-            pass
+            _, Time_Params, _ = ChooseFile()
+            return Time_Params
         elif len(Init_Time) != 6:
             print("Invalid number of dimensions and units")
         else:
@@ -212,8 +298,8 @@ def InitialiseParticles():
             print("Initialisation complete")
             break
         elif Init_Particles == ["F"] or Init_Particles == ["f"]:
-            # read paramaters from file, not implemented yet
-            pass
+            _, _, Sep_Particles = ChooseFile()
+            return Sep_Particles
         else:
             print(f"{len(Init_Particles)} parameters inputted:\n{Init_Particles}")
         if len(Init_Particles) % 8 == 0:
@@ -244,7 +330,27 @@ def InitialiseParticles():
 
 def Initialise():
     # --------------initialising the parameters of the simulation--------------#
+    use_file = input("Use file initialization? (Y/N): ").strip().lower()
+    if use_file in ["y", "yes", "f", "file"]:
+        try:
+            Box_Params, Time_Params, Sep_Particles = ChooseFile()
+            # When loaded from file, keep current input file as source and don't auto-save.
+            return (Box_Params, Time_Params, Sep_Particles)
+        except KeyboardInterrupt:
+            print("File initialization canceled, switching to manual input.")
+
     Box_Params = InitialiseBox()
     Time_Params = InitialiseTime()
     Sep_Particles = InitialiseParticles()
+
+    # Default save path for custom manual input, unless disabled by the user
+    save_choice = input("Save this custom initialization to file? (default: Enter to save, N to skip): ").strip()
+    if save_choice.lower() not in ["n", "no", "none"]:
+        filename = input("Enter filename or press Enter for 'initialization_saved.txt': ").strip()
+        if filename == "":
+            filename = "initialization_saved.txt"
+        SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename)
+    else:
+        print("Auto-save disabled by user.")
+
     return (Box_Params, Time_Params, Sep_Particles)
