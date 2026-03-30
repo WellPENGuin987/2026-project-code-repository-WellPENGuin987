@@ -35,3 +35,4 @@ sim_name = f"Sim_{Len_X}{Units_X}_x_{Len_Y}{Units_Y}_x_{Len_Z}{Units_Z},_t={Time
 print(f"Running simulation: {sim_name}")
 my_simulation = SIMU.simulation(sim_name, box_params=Box_Params, All_particles=All_particles, Time_Params=Time_Params)
 my_simulation.run_simulation()
+print("Simulation complete")
