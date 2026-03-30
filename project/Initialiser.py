@@ -1,4 +1,20 @@
+import os
+
 import numpy as np
+
+INIT_DIR = "initialization_files"
+
+
+def _ensure_init_dir():
+    if not os.path.isdir(INIT_DIR):
+        os.makedirs(INIT_DIR, exist_ok=True)
+
+
+def _init_fullpath(filename):
+    # If user passed a full path, keep it. Otherwise use init folder.
+    if os.path.isabs(filename):
+        return filename
+    return os.path.join(INIT_DIR, filename)
 
 
 def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
@@ -10,7 +26,10 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
         print("Skipping save as requested.")
         return
 
-    with open(filename, "w", encoding="utf-8") as f:
+    _ensure_init_dir()
+    fullpath = _init_fullpath(filename)
+
+    with open(fullpath, "w", encoding="utf-8") as f:
         f.write("# Box parameters: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z\n")
         f.write(",".join([str(Box_Params[0]), str(Box_Params[1]), str(Box_Params[2]), str(Box_Params[3]), str(Box_Params[4]), str(Box_Params[5])]) + "\n")
         f.write("# Time parameters: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt\n")
@@ -19,73 +38,110 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
         for p in Sep_Particles:
             f.write(",".join([str(p[0]), str(p[1]), str(p[2]), str(p[3]), str(p[5]), str(p[6]), str(p[7]), str(p[8])]) + "\n")
 
-    print(f"Initialization values saved to {filename}")
+    print(f"Initialization values saved to {fullpath}")
+
+
+def _list_saved_files():
+    """List available saved initialization files."""
+    saved_files = [f for f in os.listdir(INIT_DIR) if os.path.isfile(os.path.join(INIT_DIR, f))]
+    if saved_files:
+        print("Available saved initialization files:")
+        for f in saved_files:
+            print("  -", f)
+
+
+def _get_file_path():
+    """Get and validate file path from user input."""
+    while True:
+        file_path = input("Enter filename or path (default folder initialization_files), or X to cancel: \n").strip()
+        if file_path.lower() in ["x", "q", "quit", "exit"]:
+            raise KeyboardInterrupt("Initialization from file canceled")
+        if file_path == "":
+            print("Empty filename provided. Please enter a valid filename.")
+            continue
+        return file_path
+
+
+def _resolve_file_path(file_path):
+    """Resolve file path to full path, checking existence."""
+    fullpath = _init_fullpath(file_path)
+    if not os.path.isfile(fullpath):
+        if os.path.isabs(file_path) and os.path.isfile(file_path):
+            fullpath = file_path
+        else:
+            print(f"File does not exist at {fullpath}. Please provide a valid filename or path.")
+            return None
+    return fullpath
+
+
+def _parse_init_file(fullpath):
+    """Parse initialization file and return parameters."""
+    with open(fullpath, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+
+    if len(lines) < 3:
+        raise ValueError("Initialization file must include box, time, and at least one particle line.")
+
+    # Parse box parameters
+    box_items = [item.strip() for item in lines[0].split(",")]
+    if len(box_items) != 6:
+        raise ValueError("First line must have 6 values: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z")
+    Box_Params = [
+        np.longdouble(str(box_items[0])),
+        SetUnits(box_items[1]),
+        np.longdouble(str(box_items[2])),
+        SetUnits(box_items[3]),
+        np.longdouble(str(box_items[4])),
+        SetUnits(box_items[5]),
+    ]
+
+    # Parse time parameters
+    time_items = [item.strip() for item in lines[1].split(",")]
+    if len(time_items) != 6:
+        raise ValueError("Second line must have 6 values: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt")
+    Time_Params = [
+        np.longdouble(str(time_items[0])),
+        SetTime(time_items[1]),
+        np.longdouble(str(time_items[2])),
+        SetTime(time_items[3]),
+        np.longdouble(str(time_items[4])),
+        SetTime(time_items[5]),
+    ]
+
+    # Parse particle parameters
+    Sep_Particles = []
+    for line in lines[2:]:
+        part_items = [item.strip() for item in line.split(",")]
+        if len(part_items) != 8:
+            raise ValueError("Particle lines must have 8 values: type,N,m,D,r,Temp,Pos_dist,Vel_dist")
+        p_type = part_items[0]
+        p_N = int(part_items[1])
+        p_m = np.longdouble(str(part_items[2]))
+        p_D = int(part_items[3])
+        p_r = np.longdouble(str(part_items[4]))
+        p_temp = np.longdouble(str(part_items[5]))
+        p_pos = setPosDistType(int(part_items[6]))
+        p_vel = setVelDistType(int(part_items[7]))
+
+        inertia_data = setMomentsOfInertia(p_D)
+        Sep_Particles.append([p_type, p_N, p_m, p_D, inertia_data, p_r, p_temp, p_pos, p_vel])
+
+    return Box_Params, Time_Params, Sep_Particles
 
 
 def ChooseFile():
     """Load initialization parameters from a CSV-like text file."""
-    import os
+    _ensure_init_dir()
 
     while True:
-        file_path = input("Enter path to initialization file (or X to cancel): \n").strip()
-        if file_path.lower() in ["x", "q", "quit", "exit"]:
-            raise KeyboardInterrupt("Initialization from file canceled")
-
-        if not os.path.isfile(file_path):
-            print("File does not exist. Please provide a valid path.")
-            continue
-
-        with open(file_path, "r") as f:
-            lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
-
-        if len(lines) < 3:
-            print("Initialization file must include box, time, and at least one particle line.")
+        _list_saved_files()
+        file_path = _get_file_path()
+        fullpath = _resolve_file_path(file_path)
+        if fullpath is None:
             continue
 
         try:
-            box_items = [item.strip() for item in lines[0].split(",")]
-            if len(box_items) != 6:
-                raise ValueError("First line must have 6 values: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z")
-            Box_Params = [
-                np.longdouble(str(box_items[0])),
-                SetUnits(box_items[1]),
-                np.longdouble(str(box_items[2])),
-                SetUnits(box_items[3]),
-                np.longdouble(str(box_items[4])),
-                SetUnits(box_items[5]),
-            ]
-
-            time_items = [item.strip() for item in lines[1].split(",")]
-            if len(time_items) != 6:
-                raise ValueError("Second line must have 6 values: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt")
-            Time_Params = [
-                np.longdouble(str(time_items[0])),
-                SetTime(time_items[1]),
-                np.longdouble(str(time_items[2])),
-                SetTime(time_items[3]),
-                np.longdouble(str(time_items[4])),
-                SetTime(time_items[5]),
-            ]
-
-            Sep_Particles = []
-            for line in lines[2:]:
-                part_items = [item.strip() for item in line.split(",")]
-                if len(part_items) != 8:
-                    raise ValueError("Particle lines must have 8 values: type,N,m,D,r,Temp,Pos_dist,Vel_dist")
-                p_type = part_items[0]
-                p_N = int(part_items[1])
-                p_m = np.longdouble(str(part_items[2]))
-                p_D = int(part_items[3])
-                p_r = np.longdouble(str(part_items[4]))
-                p_temp = np.longdouble(str(part_items[5]))
-                p_pos = setPosDistType(int(part_items[6]))
-                p_vel = setVelDistType(int(part_items[7]))
-
-                inertia_data = setMomentsOfInertia(p_D)
-                Sep_Particles.append([p_type, p_N, p_m, p_D, inertia_data, p_r, p_temp, p_pos, p_vel])
-
-            return Box_Params, Time_Params, Sep_Particles
-
+            return _parse_init_file(fullpath)
         except Exception as e:
             print("Failed to parse initialization file:", e)
             print("Please fix the file or choose another file.")
