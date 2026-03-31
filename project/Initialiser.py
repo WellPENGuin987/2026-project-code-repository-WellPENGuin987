@@ -2,7 +2,32 @@ import os
 
 import numpy as np
 
+# Conversion factor: 1 Dalton = 1.66053906660e-27 kg
+DALTON_TO_KG = 1.66053906660e-27
+
+
+def da_to_kg(mass_da):
+    """Convert mass from daltons to kg."""
+    return mass_da * DALTON_TO_KG
+
+
+def kg_to_da(mass_kg):
+    """Convert mass from kg to daltons."""
+    return mass_kg / DALTON_TO_KG
+
+
+def da_A_sq_to_kg_m_sq(da_A_sq):
+    """Convert moment of inertia from Da*Å^2 to kg*m^2."""
+    return da_A_sq * DALTON_TO_KG * (1e-10) ** 2
+
+
+def kg_m_sq_to_da_A_sq(kg_m_sq):
+    """Convert moment of inertia from kg*m^2 to Da*Å^2."""
+    return kg_m_sq / (DALTON_TO_KG * (1e-10) ** 2)
+
+
 INIT_DIR = "project/initialisation_files"
+GRAPH_DIR = "project/plotted_graphs"
 
 # last file used for initialisation (None when manual entry)
 last_initialisation_file = None
@@ -11,6 +36,8 @@ last_initialisation_file = None
 def _ensure_init_dir():
     if not os.path.isdir(INIT_DIR):
         os.makedirs(INIT_DIR, exist_ok=True)
+    if not os.path.isdir(GRAPH_DIR):
+        os.makedirs(GRAPH_DIR, exist_ok=True)
 
 
 def _init_fullpath(filename):
@@ -39,7 +66,7 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, filename=None)
         f.write(",".join([str(Time_Params[0]), str(Time_Params[1]), str(Time_Params[2]), str(Time_Params[3]), str(Time_Params[4]), str(Time_Params[5])]) + "\n")
         f.write("# Seed for random number generator\n")
         f.write(str(seed) + "\n")
-        f.write("# Particle lines: type,N,m,D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes\n")
+        f.write("# Particle lines: type,N,m(Da),D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes\n")
         for p in Sep_Particles:
             vib_str = ",".join(map(str, p[4]["vibrational_modes"]))
             f.write(
@@ -47,7 +74,7 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, filename=None)
                     [
                         str(p[0]),
                         str(p[1]),
-                        str(p[2]),
+                        str(kg_to_da(p[2])),  # convert kg back to Da for file
                         str(p[3]),
                         str(p[5]),
                         str(p[6]),
@@ -146,6 +173,7 @@ def _parse_init_file(fullpath):
         p_type = part_items[0]
         p_N = int(part_items[1])
         p_m = np.longdouble(str(part_items[2]))
+        p_m = da_to_kg(p_m)  # convert from Da to kg
         p_D = int(part_items[3])
         p_r = np.longdouble(str(part_items[4]))
         p_temp = np.longdouble(str(part_items[5]))
@@ -182,7 +210,7 @@ def ChooseFile():
         try:
             Box_Params, Time_Params, Sep_Particles, seed = _parse_init_file(fullpath)
             last_initialisation_file = fullpath
-            return Box_Params, Time_Params, Sep_Particles, seed
+            return Box_Params, Time_Params, Sep_Particles, seed, file_path
         except Exception as e:
             print("Failed to parse initialisation file:", e)
             print("Please fix the file or choose another file.")
@@ -224,14 +252,14 @@ def setMomentsOfInertia(degrees):
     degrees = int(degrees)
     if degrees == 3:
         d, MoI, vib = Moments_of_inertia_point()
-    elif degrees == 4:
+    elif degrees == 5:
         d, MoI, vib = Moments_of_inertia_linear()
     elif degrees == 6:
         d, MoI, vib = Moments_of_inertia_non_linear()
     elif degrees > 6:
         d, MoI, vib = Moments_of_inertia_vibrational(degrees)
     else:
-        raise ValueError("Invalid number of degrees of freedom, must be at least 3")
+        raise ValueError("Invalid number of degrees of freedom, must be 3, 5, 6, or >6 for vibrational modes")
 
     return {
         "degrees": d,
@@ -246,7 +274,7 @@ def Moments_of_inertia_point():
 
 def Moments_of_inertia_linear():
     while True:
-        moments_of_inertia = input("Moment of inertia (I) in kg*m^2\t format: I_x,I_y (I_z is the minimum of I_x & I_y):\n").replace(" ", "").split(",")
+        moments_of_inertia = input("Moment of inertia (I) in Da*Å²\t format: I_x,I_y (I_z is the minimum of I_x & I_y):\n").replace(" ", "").split(",")
         if len(moments_of_inertia) != 2:
             print("Invalid number of moments of inertia, expected 2 for symmetric top particles, got {len(moments_of_inertia)}")
         else:
@@ -262,7 +290,7 @@ def Moments_of_inertia_linear():
 
 def Moments_of_inertia_non_linear():
     while True:
-        moments_of_inertia = input("Moments of inertia (I) in kg*m^2\t format: I_x,I_y,I_z:\n").replace(" ", "").split(",")
+        moments_of_inertia = input("Moments of inertia (I) in Da*Å²\t format: I_x,I_y,I_z:\n").replace(" ", "").split(",")
         if len(moments_of_inertia) != 3:
             print("Invalid number of moments of inertia, expected 3 for rotational degrees of freedom, got {len(moments_of_inertia)}")
         else:
@@ -273,7 +301,7 @@ def Moments_of_inertia_non_linear():
 
 def Moments_of_inertia_vibrational(degrees):
     while True:
-        moments_of_inertia = input("Moments of inertia (I) in kg*m^2\t format: I_x,I_y,I_z:\n").replace(" ", "").split(",")
+        moments_of_inertia = input("Moments of inertia (I) in  Da*Å²\t format: I_x,I_y,I_z:\n").replace(" ", "").split(",")
         if len(moments_of_inertia) != 3:
             print("Invalid number of moments of inertia, expected 3 for rotational degrees of freedom, got {len(moments_of_inertia)}")
         else:
@@ -380,8 +408,8 @@ def InitialiseParticles():
             input(
                 "Input parametetrs of particles (X to escape):\n"
                 "type is the type of particle, used to differentiate different types of particles in the graphs\n"
-                "N is the number of particles of this type\tm is the mass of the particles (kg)\n"
-                "D is how many degrees of freedom these particles have: 3 translational (minimum) + 1 or 3 rotational + 1 vibrational\n"
+                "N is the number of particles of this type\tm is the mass of the particles (Da)\n"
+                "D is how many degrees of freedom these particles have: 3 translational (minimum) + 2 or 3 rotational + 1 vibrational\n"
                 "r is the radius of collision of these particles (Å)\tTemp is the initial temperature of these particles (K)\n"
                 "Pos_dist is the type of distribution of the initial positions of these particles (Lattice = 1, Uniform pdf = 2, Custom gradient pdf = 3)\n"
                 "Vel_dist is the type of distribution of the initial velocities of these particles (Identical RMS = 1, Uniform RMS pdf = 2, Maxwell-Boltzmann = 3)\n"
@@ -405,6 +433,7 @@ def InitialiseParticles():
                 Current_Particles.append(str(Init_Particles[0]))  # particle type
                 Current_Particles.append(int(Init_Particles[1]))  # number of particles of this type
                 Current_Particles.append(np.longdouble(str(Init_Particles[2])))  # mass of particles of this type
+                Current_Particles[-1] = da_to_kg(Current_Particles[-1])  # convert from Da to kg
 
                 # keep degrees as numeric for simulation, and keep inertia structure as extra metadata
                 inertia_data = setMomentsOfInertia(Init_Particles[3])
@@ -433,9 +462,9 @@ def Initialise():
     use_file = input("Use file initialisation? (Y/N): ").strip().lower()
     if use_file in ["y", "yes", "f", "file"]:
         try:
-            Box_Params, Time_Params, Sep_Particles, seed = ChooseFile()
+            Box_Params, Time_Params, Sep_Particles, seed, init_file = ChooseFile()
             # When loaded from file, keep current input file as source and don't auto-save.
-            return (Box_Params, Time_Params, Sep_Particles, seed)
+            return (Box_Params, Time_Params, Sep_Particles, seed, init_file)
         except KeyboardInterrupt:
             print("File initialisation canceled, switching to manual input.")
 
@@ -444,16 +473,28 @@ def Initialise():
     Sep_Particles = InitialiseParticles()
 
     # Generate a random seed for reproducibility
-    seed = np.random.randint(0, 2**32)
+    seed = input("Enter a random seed for reproducibility (or press Enter to generate a random seed): ").strip()
+    if seed == "":
+        seed = np.random.randint(0, 2**31 - 1)
+        print(f"Generated random seed: {seed}")
+    else:
+        while True:
+            try:
+                seed = int(seed)
+                break
+            except ValueError:
+                seed = input("Invalid seed. Please enter an integer value for the random seed: ").strip()
 
     # Default save path for custom manual input, unless disabled by the user
     save_choice = input("Save this custom initialisation to file? (default: Enter to save, N to skip): ").strip()
     if save_choice.lower() not in ["n", "no", "none"]:
-        filename = input("Enter filename or press Enter for 'initialisation_saved.txt': ").strip()
-        if filename == "":
-            filename = "initialisation_saved.txt"
-        SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, filename)
+        init_file = input("Enter filename or press Enter for 'initialisation_saved.txt': ").strip()
+        if init_file == "":
+            init_file = "initialisation_saved.txt"
+        if not init_file.endswith(".txt"):
+            init_file += ".txt"
+        SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, init_file)
     else:
         print("Auto-save disabled by user.")
 
-    return (Box_Params, Time_Params, Sep_Particles, seed)
+    return (Box_Params, Time_Params, Sep_Particles, seed, init_file)

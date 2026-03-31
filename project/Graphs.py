@@ -16,9 +16,11 @@ class graph:
         print("Base graph class does not implement plot method")
 
     def _save_or_show(self):
+        plt.tight_layout()
+        plt.grid(True, alpha=0.3)
         if hasattr(self, "save_dir") and self.save_dir:
             os.makedirs(self.save_dir, exist_ok=True)
-            plt.savefig(os.path.join(self.save_dir, f"{self.title}.png"))
+            plt.savefig(os.path.join(self.save_dir, f"{self.title}.png"), dpi=300, bbox_inches="tight")
             plt.close()
         else:
             plt.show()
@@ -51,17 +53,23 @@ class position_distribution(graph):
             histograms.append(hist)
         histograms = np.array(histograms)
         # Plot as image: x=epoch, y=distance, color=frequency
-        plt.figure()
+        plt.figure(figsize=(10, 6))
         x_max = len(data) * self.time_step if self.time_step else len(data)
-        plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_dist, max_dist], cmap="viridis")
-        plt.colorbar(label="Frequency")
-        plt.xlabel("Time (s)" if self.time_step else "Epoch")
-        plt.ylabel("Radial Distance")
-        plt.title(self.title)
+        im = plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_dist, max_dist], cmap="viridis")
+        cbar = plt.colorbar(im, label="Number of Particles")
+        cbar.ax.tick_params(labelsize=10)
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel("Radial Distance from Origin (m)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
         # Overlay mean line
+        x_max = len(data) * self.time_step if self.time_step else len(data)
         x_vals = [i * self.time_step for i in range(len(data))] if self.time_step else range(len(data))
-        plt.plot(x_vals, epoch_means, "r-", linewidth=2, label="Mean Radial Distance")
-        plt.legend()
+        # Extend mean line to the right edge of the graph
+        x_vals_extended = list(x_vals) + [x_max]
+        epoch_means_extended = epoch_means + [epoch_means[-1]]
+        plt.plot(x_vals_extended, epoch_means_extended, "r-", linewidth=2, label="Mean Radial Distance")
+        plt.legend(fontsize=10)
+        plt.tick_params(axis="both", which="major", labelsize=10)
         self._save_or_show()
 
 
@@ -92,17 +100,23 @@ class velocity_distribution(graph):
             histograms.append(hist)
         histograms = np.array(histograms)
         # Plot as image: x=epoch, y=speed, color=frequency
-        plt.figure()
+        plt.figure(figsize=(10, 6))
         x_max = len(data) * self.time_step if self.time_step else len(data)
-        plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_speed, max_speed], cmap="viridis")
-        plt.colorbar(label="Frequency")
-        plt.xlabel("Time (s)" if self.time_step else "Epoch")
-        plt.ylabel("Speed")
-        plt.title(self.title)
+        im = plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_speed, max_speed], cmap="viridis")
+        cbar = plt.colorbar(im, label="Number of Particles")
+        cbar.ax.tick_params(labelsize=10)
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel("Particle Speed (m/s)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
         # Overlay mean line
+        x_max = len(data) * self.time_step if self.time_step else len(data)
         x_vals = [i * self.time_step for i in range(len(data))] if self.time_step else range(len(data))
-        plt.plot(x_vals, epoch_means, "r-", linewidth=2, label="Mean Speed")
-        plt.legend()
+        # Extend mean line to the right edge of the graph
+        x_vals_extended = list(x_vals) + [x_max]
+        epoch_means_extended = epoch_means + [epoch_means[-1]]
+        plt.plot(x_vals_extended, epoch_means_extended, "r-", linewidth=2, label="Mean Speed")
+        plt.legend(fontsize=10)
+        plt.tick_params(axis="both", which="major", labelsize=10)
         self._save_or_show()
 
 
@@ -127,18 +141,24 @@ class energy_distribution(graph):
             histograms.append(hist)
         histograms = np.array(histograms)
         # Plot as image: x=epoch, y=energy, color=frequency
-        plt.figure()
+        plt.figure(figsize=(10, 6))
         x_max = len(data) * self.time_step if self.time_step else len(data)
-        plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_energy, max_energy], cmap="viridis")
-        plt.colorbar(label="Frequency")
-        plt.xlabel("Time (s)" if self.time_step else "Epoch")
-        plt.ylabel("Energy")
-        plt.title(self.title)
+        im = plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_energy, max_energy], cmap="viridis")
+        cbar = plt.colorbar(im, label="Number of Particles")
+        cbar.ax.tick_params(labelsize=10)
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel("Kinetic Energy per Particle (J)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
         # Overlay mean line
+        x_max = len(data) * self.time_step if self.time_step else len(data)
         epoch_means = [np.mean(epoch_energies) for epoch_energies in data]
         x_vals = [i * self.time_step for i in range(len(data))] if self.time_step else range(len(data))
-        plt.plot(x_vals, epoch_means, "r-", linewidth=2, label="Mean Energy")
-        plt.legend()
+        # Extend mean line to the right edge of the graph
+        x_vals_extended = list(x_vals) + [x_max]
+        epoch_means_extended = epoch_means + [epoch_means[-1]]
+        plt.plot(x_vals_extended, epoch_means_extended, "r-", linewidth=2, label="Mean Energy")
+        plt.legend(fontsize=10)
+        plt.tick_params(axis="both", which="major", labelsize=10)
         self._save_or_show()
 
 
@@ -163,18 +183,129 @@ class temperature_distribution(graph):
             histograms.append(hist)
         histograms = np.array(histograms)
         # Plot as image: x=epoch, y=temperature, color=frequency
-        plt.figure()
+        plt.figure(figsize=(10, 6))
         x_max = len(data) * self.time_step if self.time_step else len(data)
-        plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_temp, max_temp], cmap="viridis")
-        plt.colorbar(label="Frequency")
-        plt.xlabel("Time (s)" if self.time_step else "Epoch")
-        plt.ylabel("Temperature")
-        plt.title(self.title)
+        im = plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_temp, max_temp], cmap="viridis")
+        cbar = plt.colorbar(im, label="Number of Particles")
+        cbar.ax.tick_params(labelsize=10)
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel("Temperature (K)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
         # Overlay mean line
+        x_max = len(data) * self.time_step if self.time_step else len(data)
         epoch_means = [np.mean(epoch_temps) for epoch_temps in data]
         x_vals = [i * self.time_step for i in range(len(data))] if self.time_step else range(len(data))
-        plt.plot(x_vals, epoch_means, "r-", linewidth=2, label="Mean Temperature")
-        plt.legend()
+        # Extend mean line to the right edge of the graph
+        x_vals_extended = list(x_vals) + [x_max]
+        epoch_means_extended = epoch_means + [epoch_means[-1]]
+        plt.plot(x_vals_extended, epoch_means_extended, "r-", linewidth=2, label="Mean Temperature")
+        plt.legend(fontsize=10)
+        plt.tick_params(axis="both", which="major", labelsize=10)
+        self._save_or_show()
+
+
+class angular_momentum_distribution(graph):
+    def __init__(self, title, x_axis, y_axis, time_step=None):
+        super().__init__(title, x_axis, y_axis, time_step)
+
+        def plot(self, data):
+            if not data:
+                return  # No data to plot
+
+
+class total_angular_momentum_squared_distribution(graph):
+    def __init__(self, title, x_axis, y_axis, time_step=None):
+        super().__init__(title, x_axis, y_axis, time_step)
+
+    def plot(self, data):
+        if not data:
+            return
+
+        # Total angular momentum at each recorded time point is the vector sum across particles.
+        total_L_squared = []
+        for epoch_L_vectors in data:
+            if not epoch_L_vectors:
+                total_L_squared.append(0.0)
+                continue
+            L_total = np.sum(np.array(epoch_L_vectors, dtype=float), axis=0)
+            total_L_squared.append(float(np.dot(L_total, L_total)))
+
+        plt.figure(figsize=(10, 6))
+        x_vals = [i * self.time_step for i in range(len(total_L_squared))] if self.time_step else range(len(total_L_squared))
+        plt.plot(x_vals, total_L_squared, "m-", linewidth=2, marker="s", markersize=4, label=r"Total $|L_{tot}|^2$")
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel(r"Total Angular Momentum Squared $(\mathrm{kg}^2\,\mathrm{m}^4/\mathrm{s}^2)$", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
+        plt.legend(fontsize=10)
+        plt.tick_params(axis="both", which="major", labelsize=10)
+        self._save_or_show()
+
+
+class total_rotational_energy_distribution(graph):
+    def __init__(self, title, x_axis, y_axis, time_step=None):
+        super().__init__(title, x_axis, y_axis, time_step)
+
+    def plot(self, data):
+        if not data:
+            return
+
+        total_rotational_energy = [float(np.sum(epoch_rot)) for epoch_rot in data]
+        plt.figure(figsize=(10, 6))
+        x_vals = [i * self.time_step for i in range(len(total_rotational_energy))] if self.time_step else range(len(total_rotational_energy))
+        plt.plot(x_vals, total_rotational_energy, "c-", linewidth=2.2, marker="D", markersize=4, label=r"Total Rotational Energy")
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel(r"Total Rotational Kinetic Energy (J)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
+        plt.legend(fontsize=10)
+        plt.tick_params(axis="both", which="major", labelsize=10)
+        self._save_or_show()
+
+
+class total_vibrational_energy_distribution(graph):
+    def __init__(self, title, x_axis, y_axis, time_step=None):
+        super().__init__(title, x_axis, y_axis, time_step)
+
+    def plot(self, data):
+        if not data:
+            return
+
+        total_vibrational_energy = [float(np.sum(epoch_vib)) for epoch_vib in data]
+        plt.figure(figsize=(10, 6))
+        x_vals = [i * self.time_step for i in range(len(total_vibrational_energy))] if self.time_step else range(len(total_vibrational_energy))
+        plt.plot(x_vals, total_vibrational_energy, "y-", linewidth=2.2, marker="^", markersize=4, label=r"Total Vibrational Energy")
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel(r"Total Vibrational Energy (J)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
+        plt.legend(fontsize=10)
+        plt.tick_params(axis="both", which="major", labelsize=10)
+        self._save_or_show()
+
+
+class total_kinetic_energy_components_distribution(graph):
+    def __init__(self, title, x_axis, y_axis, time_step=None):
+        super().__init__(title, x_axis, y_axis, time_step)
+
+    def plot(self, translational_data, rotational_data, vibrational_data):
+        if not translational_data or not rotational_data or not vibrational_data:
+            return
+
+        n_points = min(len(translational_data), len(rotational_data), len(vibrational_data))
+        total_trans = [float(np.sum(translational_data[i])) for i in range(n_points)]
+        total_rot = [float(np.sum(rotational_data[i])) for i in range(n_points)]
+        total_vib = [float(np.sum(vibrational_data[i])) for i in range(n_points)]
+        total_all = [total_trans[i] + total_rot[i] + total_vib[i] for i in range(n_points)]
+
+        plt.figure(figsize=(10, 6))
+        x_vals = [i * self.time_step for i in range(n_points)] if self.time_step else range(n_points)
+        plt.plot(x_vals, total_trans, "b-", linewidth=1.8, label=r"Translational ($E_{trans}$)", marker="o", markersize=3)
+        plt.plot(x_vals, total_rot, "c-", linewidth=1.8, label=r"Rotational ($E_{rot}$)", marker="s", markersize=3)
+        plt.plot(x_vals, total_vib, "y-", linewidth=1.8, label=r"Vibrational ($E_{vib}$)", marker="^", markersize=3)
+        plt.plot(x_vals, total_all, "k-", linewidth=2.4, label=r"Total Energy", marker="D", markersize=3)
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel("Total System Energy (J)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
+        plt.legend(fontsize=10, loc="best")
+        plt.tick_params(axis="both", which="major", labelsize=10)
         self._save_or_show()
 
 
@@ -188,14 +319,15 @@ class pressure_distribution(graph):
         # Plot average pressures over time for ideal and impulse calculations
         avg_ideal = [np.mean([p[0] for p in epoch]) for epoch in data]
         avg_impulse = [np.mean([p[1] for p in epoch]) for epoch in data]
-        plt.figure()
+        plt.figure(figsize=(10, 6))
         x_vals = [i * self.time_step for i in range(len(data))] if self.time_step else range(len(data))
-        plt.plot(x_vals, avg_ideal, "r-", label="Ideal Gas Pressure")
-        plt.plot(x_vals, avg_impulse, "b-", label="Impulse-Based Pressure")
-        plt.xlabel("Time (s)" if self.time_step else "Epoch")
-        plt.ylabel("Average Pressure")
-        plt.title(self.title)
-        plt.legend()
+        plt.plot(x_vals, avg_ideal, "r-", linewidth=2, label="Ideal Gas (PV=NkT)")
+        plt.plot(x_vals, avg_impulse, "b-", linewidth=2, label="Impulse-Based (Wall Collisions)")
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel("System Pressure (Pa)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
+        plt.legend(fontsize=10, loc="best")
+        plt.tick_params(axis="both", which="major", labelsize=10)
         self._save_or_show()
 
 
@@ -208,12 +340,13 @@ class collision_count(graph):
             return  # No data to plot
         # Plot total collisions over time
         total_collisions = [sum(c) for c in data]
-        plt.figure()
+        plt.figure(figsize=(10, 6))
         x_vals = [i * self.time_step for i in range(len(data))] if self.time_step else range(len(data))
-        plt.plot(x_vals, total_collisions)
-        plt.xlabel("Time (s)" if self.time_step else "Time Step")
-        plt.ylabel("Total Collisions")
-        plt.title(self.title)
+        plt.plot(x_vals, total_collisions, "g-", linewidth=2, marker="o", markersize=4)
+        plt.xlabel("Time (s)" if self.time_step else "Time Step", fontsize=12)
+        plt.ylabel("Total Collision Count", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
+        plt.tick_params(axis="both", which="major", labelsize=10)
         self._save_or_show()
 
 
@@ -238,16 +371,22 @@ class pairwise_distance(graph):
             histograms.append(hist)
         histograms = np.array(histograms)
         # Plot as image: x=epoch, y=distance, color=frequency
-        plt.figure()
+        plt.figure(figsize=(10, 6))
         x_max = len(data) * self.time_step if self.time_step else len(data)
-        plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_dist, max_dist], cmap="viridis")
-        plt.colorbar(label="Frequency")
-        plt.xlabel("Time (s)" if self.time_step else "Epoch")
-        plt.ylabel("Pairwise Distance")
-        plt.title(self.title)
+        im = plt.imshow(histograms.T, aspect="auto", origin="lower", extent=[0, x_max, min_dist, max_dist], cmap="viridis")
+        cbar = plt.colorbar(im, label="Number of Particle Pairs")
+        cbar.ax.tick_params(labelsize=10)
+        plt.xlabel("Time (s)" if self.time_step else "Epoch", fontsize=12)
+        plt.ylabel("Pairwise Separation Distance (m)", fontsize=12)
+        plt.title(self.title, fontsize=14, fontweight="bold")
         # Overlay mean line
+        x_max = len(data) * self.time_step if self.time_step else len(data)
         epoch_means = [np.mean(epoch_distances) for epoch_distances in data]
         x_vals = [i * self.time_step for i in range(len(data))] if self.time_step else range(len(data))
-        plt.plot(x_vals, epoch_means, "r-", linewidth=2, label="Mean Pairwise Distance")
-        plt.legend()
+        # Extend mean line to the right edge of the graph
+        x_vals_extended = list(x_vals) + [x_max]
+        epoch_means_extended = epoch_means + [epoch_means[-1]]
+        plt.plot(x_vals_extended, epoch_means_extended, "r-", linewidth=2, label="Mean Pairwise Distance")
+        plt.legend(fontsize=10)
+        plt.tick_params(axis="both", which="major", labelsize=10)
         self._save_or_show()
