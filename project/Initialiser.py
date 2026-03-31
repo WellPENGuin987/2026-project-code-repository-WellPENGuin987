@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-INIT_DIR = "initialization_files"
+INIT_DIR = "initialisation_files"
 
 
 def _ensure_init_dir():
@@ -18,9 +18,9 @@ def _init_fullpath(filename):
 
 
 def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
-    """Save the current initialization parameters in text format."""
+    """Save the current initialisation parameters in text format."""
     if filename is None:
-        filename = "initialization_saved.txt"
+        filename = "initialisation_saved.txt"
 
     if isinstance(filename, str) and filename.strip().lower() in ["n", "no", "none"]:
         print("Skipping save as requested.")
@@ -38,14 +38,14 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
         for p in Sep_Particles:
             f.write(",".join([str(p[0]), str(p[1]), str(p[2]), str(p[3]), str(p[5]), str(p[6]), str(p[7]), str(p[8])]) + "\n")
 
-    print(f"Initialization values saved to {fullpath}")
+    print(f"Initialisation values saved to {fullpath}")
 
 
 def _list_saved_files():
-    """List available saved initialization files."""
+    """List available saved initialisation files."""
     saved_files = [f for f in os.listdir(INIT_DIR) if os.path.isfile(os.path.join(INIT_DIR, f))]
     if saved_files:
-        print("Available saved initialization files:")
+        print("Available saved initialisation files:")
         for f in saved_files:
             print("  -", f)
 
@@ -53,9 +53,9 @@ def _list_saved_files():
 def _get_file_path():
     """Get and validate file path from user input."""
     while True:
-        file_path = input("Enter filename or path (default folder initialization_files), or X to cancel: \n").strip()
+        file_path = input("Enter filename or path (default folder initialisation_files), or X to cancel: \n").strip()
         if file_path.lower() in ["x", "q", "quit", "exit"]:
-            raise KeyboardInterrupt("Initialization from file canceled")
+            raise KeyboardInterrupt("Initialisation from file canceled")
         if file_path == "":
             print("Empty filename provided. Please enter a valid filename.")
             continue
@@ -75,12 +75,12 @@ def _resolve_file_path(file_path):
 
 
 def _parse_init_file(fullpath):
-    """Parse initialization file and return parameters."""
+    """Parse initialisation file and return parameters."""
     with open(fullpath, "r", encoding="utf-8") as f:
         lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
 
     if len(lines) < 3:
-        raise ValueError("Initialization file must include box, time, and at least one particle line.")
+        raise ValueError("Initialisation file must include box, time, and at least one particle line.")
 
     # Parse box parameters
     box_items = [item.strip() for item in lines[0].split(",")]
@@ -130,7 +130,7 @@ def _parse_init_file(fullpath):
 
 
 def ChooseFile():
-    """Load initialization parameters from a CSV-like text file."""
+    """Load initialisation parameters from a CSV-like text file."""
     _ensure_init_dir()
 
     while True:
@@ -143,7 +143,7 @@ def ChooseFile():
         try:
             return _parse_init_file(fullpath)
         except Exception as e:
-            print("Failed to parse initialization file:", e)
+            print("Failed to parse initialisation file:", e)
             print("Please fix the file or choose another file.")
             continue
 
@@ -386,25 +386,25 @@ def InitialiseParticles():
 
 def Initialise():
     # --------------initialising the parameters of the simulation--------------#
-    use_file = input("Use file initialization? (Y/N): ").strip().lower()
+    use_file = input("Use file initialisation? (Y/N): ").strip().lower()
     if use_file in ["y", "yes", "f", "file"]:
         try:
             Box_Params, Time_Params, Sep_Particles = ChooseFile()
             # When loaded from file, keep current input file as source and don't auto-save.
             return (Box_Params, Time_Params, Sep_Particles)
         except KeyboardInterrupt:
-            print("File initialization canceled, switching to manual input.")
+            print("File initialisation canceled, switching to manual input.")
 
     Box_Params = InitialiseBox()
     Time_Params = InitialiseTime()
     Sep_Particles = InitialiseParticles()
 
     # Default save path for custom manual input, unless disabled by the user
-    save_choice = input("Save this custom initialization to file? (default: Enter to save, N to skip): ").strip()
+    save_choice = input("Save this custom initialisation to file? (default: Enter to save, N to skip): ").strip()
     if save_choice.lower() not in ["n", "no", "none"]:
-        filename = input("Enter filename or press Enter for 'initialization_saved.txt': ").strip()
+        filename = input("Enter filename or press Enter for 'initialisation_saved.txt': ").strip()
         if filename == "":
-            filename = "initialization_saved.txt"
+            filename = "initialisation_saved.txt"
         SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename)
     else:
         print("Auto-save disabled by user.")

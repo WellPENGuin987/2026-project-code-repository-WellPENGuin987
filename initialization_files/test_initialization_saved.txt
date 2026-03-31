@@ -1,6 +1,0 @@
-# Box parameters: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z
-1.0,m,2.0,m,3.0,m
-# Time parameters: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt
-10.0,s,0.1,s,1.0,s
-# Particle lines: type,N,m,D,r,Temp,Pos_dist,Vel_dist
-A,8,1.0,3,0.1,300,1,1
