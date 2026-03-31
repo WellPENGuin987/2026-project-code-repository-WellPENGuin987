@@ -1,3 +1,5 @@
+import os
+
 import Distributions as DIST
 import Initialiser as INIT
 import Particles as PART
@@ -31,7 +33,16 @@ for p in range(len(Sep_Particles)):
 # -----------------run simulation-----------------
 Len_X, Units_X, Len_Y, Units_Y, Len_Z, Units_Z = Box_Params
 Time, Units_Time, dt, Units_dt, T_plt, Units_T_plt = Time_Params
-sim_name = f"Sim_{Len_X}{Units_X}_x_{Len_Y}{Units_Y}_x_{Len_Z}{Units_Z},_t={Time}{Units_Time},_dt={dt}{Units_dt}"
+
+# Use input file name as simulation name when file-based initialisation was chosen.
+init_file = getattr(INIT, "last_initialisation_file", None)
+if init_file:
+    sim_name = os.path.basename(init_file)
+    if sim_name.lower().endswith(".txt"):
+        sim_name = sim_name[:-4]  # remove .txt extension
+else:
+    sim_name = f"Sim_{Len_X}{Units_X}_x_{Len_Y}{Units_Y}_x_{Len_Z}{Units_Z},_t={Time}{Units_Time},_dt={dt}{Units_dt}"
+
 my_simulation = SIMU.simulation(sim_name, box_params=Box_Params, All_particles=All_particles, Time_Params=Time_Params)
 print(f"Running simulation: {sim_name}")
 my_simulation.run_simulation()

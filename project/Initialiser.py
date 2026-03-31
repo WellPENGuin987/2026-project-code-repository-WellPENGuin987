@@ -2,7 +2,10 @@ import os
 
 import numpy as np
 
-INIT_DIR = "initialisation_files"
+INIT_DIR = "project/initialisation_files"
+
+# last file used for initialisation (None when manual entry)
+last_initialisation_file = None
 
 
 def _ensure_init_dir():
@@ -34,9 +37,28 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
         f.write(",".join([str(Box_Params[0]), str(Box_Params[1]), str(Box_Params[2]), str(Box_Params[3]), str(Box_Params[4]), str(Box_Params[5])]) + "\n")
         f.write("# Time parameters: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt\n")
         f.write(",".join([str(Time_Params[0]), str(Time_Params[1]), str(Time_Params[2]), str(Time_Params[3]), str(Time_Params[4]), str(Time_Params[5])]) + "\n")
-        f.write("# Particle lines: type,N,m,D,r,Temp,Pos_dist,Vel_dist\n")
+        f.write("# Particle lines: type,N,m,D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes\n")
         for p in Sep_Particles:
-            f.write(",".join([str(p[0]), str(p[1]), str(p[2]), str(p[3]), str(p[5]), str(p[6]), str(p[7]), str(p[8])]) + "\n")
+            vib_str = ",".join(map(str, p[4]["vibrational_modes"]))
+            f.write(
+                ",".join(
+                    [
+                        str(p[0]),
+                        str(p[1]),
+                        str(p[2]),
+                        str(p[3]),
+                        str(p[5]),
+                        str(p[6]),
+                        str(p[7]),
+                        str(p[8]),
+                        str(p[4]["moments_of_inertia"][0]),
+                        str(p[4]["moments_of_inertia"][1]),
+                        str(p[4]["moments_of_inertia"][2]),
+                        vib_str,
+                    ]
+                )
+                + "\n"
+            )
 
     print(f"Initialisation values saved to {fullpath}")
 
@@ -48,6 +70,8 @@ def _list_saved_files():
         print("Available saved initialisation files:")
         for f in saved_files:
             print("  -", f)
+    else:
+        print("No saved initialisation files found in the directory.")
 
 
 def _get_file_path():
@@ -112,8 +136,8 @@ def _parse_init_file(fullpath):
     Sep_Particles = []
     for line in lines[2:]:
         part_items = [item.strip() for item in line.split(",")]
-        if len(part_items) != 8:
-            raise ValueError("Particle lines must have 8 values: type,N,m,D,r,Temp,Pos_dist,Vel_dist")
+        if len(part_items) != 12:
+            raise ValueError("Particle lines must have 12 values: type,N,m,D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes")
         p_type = part_items[0]
         p_N = int(part_items[1])
         p_m = np.longdouble(str(part_items[2]))
@@ -122,8 +146,17 @@ def _parse_init_file(fullpath):
         p_temp = np.longdouble(str(part_items[5]))
         p_pos = setPosDistType(int(part_items[6]))
         p_vel = setVelDistType(int(part_items[7]))
+        I_x = np.longdouble(str(part_items[8]))
+        I_y = np.longdouble(str(part_items[9]))
+        I_z = np.longdouble(str(part_items[10]))
+        vib_str = part_items[11]
+        vib_modes = [np.longdouble(x.strip()) for x in vib_str.split(",") if x.strip()] if vib_str else []
 
-        inertia_data = setMomentsOfInertia(p_D)
+        inertia_data = {
+            "degrees": p_D,
+            "moments_of_inertia": [I_x, I_y, I_z],
+            "vibrational_modes": vib_modes,
+        }
         Sep_Particles.append([p_type, p_N, p_m, p_D, inertia_data, p_r, p_temp, p_pos, p_vel])
 
     return Box_Params, Time_Params, Sep_Particles
@@ -131,6 +164,7 @@ def _parse_init_file(fullpath):
 
 def ChooseFile():
     """Load initialisation parameters from a CSV-like text file."""
+    global last_initialisation_file
     _ensure_init_dir()
 
     while True:
@@ -141,7 +175,9 @@ def ChooseFile():
             continue
 
         try:
-            return _parse_init_file(fullpath)
+            Box_Params, Time_Params, Sep_Particles = _parse_init_file(fullpath)
+            last_initialisation_file = fullpath
+            return Box_Params, Time_Params, Sep_Particles
         except Exception as e:
             print("Failed to parse initialisation file:", e)
             print("Please fix the file or choose another file.")
@@ -386,6 +422,9 @@ def InitialiseParticles():
 
 def Initialise():
     # --------------initialising the parameters of the simulation--------------#
+    global last_initialisation_file
+    last_initialisation_file = None
+
     use_file = input("Use file initialisation? (Y/N): ").strip().lower()
     if use_file in ["y", "yes", "f", "file"]:
         try:

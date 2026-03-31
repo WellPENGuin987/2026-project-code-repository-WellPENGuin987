@@ -1,0 +1,6 @@
+# Box parameters: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z
+1.0,mim,1.0,mim,1.0,mim
+# Time parameters: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt
+100.0,mis,1.0,mis,10.0,mis
+# Particle lines: type,N,m,D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes
+water,100,3e-26,6,10.0,400.0,2,2,1e-47,1.8e-47,2.8e-47,
