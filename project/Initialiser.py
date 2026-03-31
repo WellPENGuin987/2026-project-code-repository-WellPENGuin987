@@ -20,7 +20,7 @@ def _init_fullpath(filename):
     return os.path.join(INIT_DIR, filename)
 
 
-def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
+def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, filename=None):
     """Save the current initialisation parameters in text format."""
     if filename is None:
         filename = "initialisation_saved.txt"
@@ -37,6 +37,8 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename=None):
         f.write(",".join([str(Box_Params[0]), str(Box_Params[1]), str(Box_Params[2]), str(Box_Params[3]), str(Box_Params[4]), str(Box_Params[5])]) + "\n")
         f.write("# Time parameters: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt\n")
         f.write(",".join([str(Time_Params[0]), str(Time_Params[1]), str(Time_Params[2]), str(Time_Params[3]), str(Time_Params[4]), str(Time_Params[5])]) + "\n")
+        f.write("# Seed for random number generator\n")
+        f.write(str(seed) + "\n")
         f.write("# Particle lines: type,N,m,D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes\n")
         for p in Sep_Particles:
             vib_str = ",".join(map(str, p[4]["vibrational_modes"]))
@@ -103,8 +105,8 @@ def _parse_init_file(fullpath):
     with open(fullpath, "r", encoding="utf-8") as f:
         lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
 
-    if len(lines) < 3:
-        raise ValueError("Initialisation file must include box, time, and at least one particle line.")
+    if len(lines) < 4:
+        raise ValueError("Initialisation file must include box, time, seed, and at least one particle line.")
 
     # Parse box parameters
     box_items = [item.strip() for item in lines[0].split(",")]
@@ -132,9 +134,12 @@ def _parse_init_file(fullpath):
         SetTime(time_items[5]),
     ]
 
+    # Parse seed
+    seed = int(lines[2].strip())
+
     # Parse particle parameters
     Sep_Particles = []
-    for line in lines[2:]:
+    for line in lines[3:]:
         part_items = [item.strip() for item in line.split(",")]
         if len(part_items) != 12:
             raise ValueError("Particle lines must have 12 values: type,N,m,D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes")
@@ -159,7 +164,7 @@ def _parse_init_file(fullpath):
         }
         Sep_Particles.append([p_type, p_N, p_m, p_D, inertia_data, p_r, p_temp, p_pos, p_vel])
 
-    return Box_Params, Time_Params, Sep_Particles
+    return Box_Params, Time_Params, Sep_Particles, seed
 
 
 def ChooseFile():
@@ -175,9 +180,9 @@ def ChooseFile():
             continue
 
         try:
-            Box_Params, Time_Params, Sep_Particles = _parse_init_file(fullpath)
+            Box_Params, Time_Params, Sep_Particles, seed = _parse_init_file(fullpath)
             last_initialisation_file = fullpath
-            return Box_Params, Time_Params, Sep_Particles
+            return Box_Params, Time_Params, Sep_Particles, seed
         except Exception as e:
             print("Failed to parse initialisation file:", e)
             print("Please fix the file or choose another file.")
@@ -428,9 +433,9 @@ def Initialise():
     use_file = input("Use file initialisation? (Y/N): ").strip().lower()
     if use_file in ["y", "yes", "f", "file"]:
         try:
-            Box_Params, Time_Params, Sep_Particles = ChooseFile()
+            Box_Params, Time_Params, Sep_Particles, seed = ChooseFile()
             # When loaded from file, keep current input file as source and don't auto-save.
-            return (Box_Params, Time_Params, Sep_Particles)
+            return (Box_Params, Time_Params, Sep_Particles, seed)
         except KeyboardInterrupt:
             print("File initialisation canceled, switching to manual input.")
 
@@ -438,14 +443,17 @@ def Initialise():
     Time_Params = InitialiseTime()
     Sep_Particles = InitialiseParticles()
 
+    # Generate a random seed for reproducibility
+    seed = np.random.randint(0, 2**32)
+
     # Default save path for custom manual input, unless disabled by the user
     save_choice = input("Save this custom initialisation to file? (default: Enter to save, N to skip): ").strip()
     if save_choice.lower() not in ["n", "no", "none"]:
         filename = input("Enter filename or press Enter for 'initialisation_saved.txt': ").strip()
         if filename == "":
             filename = "initialisation_saved.txt"
-        SaveInputToFile(Box_Params, Time_Params, Sep_Particles, filename)
+        SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, filename)
     else:
         print("Auto-save disabled by user.")
 
-    return (Box_Params, Time_Params, Sep_Particles)
+    return (Box_Params, Time_Params, Sep_Particles, seed)

@@ -1,12 +1,16 @@
 import os
 
+import numpy as np
 import Distributions as DIST
 import Initialiser as INIT
 import Particles as PART
 import Simulation as SIMU
 
 # -----------------build simulation from the initialisation-----------------
-Box_Params, Time_Params, Sep_Particles = INIT.Initialise()
+Box_Params, Time_Params, Sep_Particles, seed = INIT.Initialise()
+
+# Set the random seed for reproducible distributions
+np.random.seed(seed)
 
 All_particles = []  # list of all particle objects in the simulation, will be updated as particles are initialised and created during the simulation
 print(f"different types of particles: {len(Sep_Particles)}")
