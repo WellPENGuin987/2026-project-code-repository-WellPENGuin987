@@ -1,8 +1,8 @@
 # Box parameters: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z
 1.0,mm,1.0,mm,1.0,mm
 # Time parameters: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt
-1.0,ms,1.0,mis,5.0,mis
+10.0,ms,1.0,mis,50.0,mis
 # Seed for random number generator
 12345
 # Particle lines: type,N,m(Da),D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes
-water,100,18.0,6,1.5,400.0,2,2,1.93,0.615,1.15,1.77
+water,100,18.0,6,1.5,400.0,1,1,1.93,0.615,1.15,1.77

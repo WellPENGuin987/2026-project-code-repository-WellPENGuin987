@@ -4,6 +4,8 @@ import numpy as np
 import scipy.stats
 from sympy.parsing.sympy_parser import parse_expr
 
+from sympy import lambdify
+
 # ------------------------------Position distributions------------------------------#
 
 
@@ -117,47 +119,94 @@ class Uniform_prob_density_s(Coordinate_dist_3D):
 class Gradient_prob_density_s(Coordinate_dist_3D):
     """Generate N positions distributed in the box according to a custom probability density function that can be defined by the user."""
 
-    def __init__(self, box_size, N, density_func=None):
+    def __init__(self, box_size, N, density_func=None, func_expr_str=None):
         self.dist_name = "Custom gradient pdf"
         super().__init__(box_size, N)
         # density_func should be a callable that takes (x, y, z) and returns probability density
         self.density_func = density_func if density_func else self._default_density
+        self.func_expr_str = func_expr_str
+        self._grid_shape = self._choose_grid_shape()
 
-    def generate(self):
-        """Prompt user for custom density function."""
+    def _default_density(self, x, y, z):
+        return 1.0
 
+    def _choose_grid_shape(self):
+        """Choose a sampling grid fine enough to represent the density without excessive cost."""
+        approx_cells_per_axis = int(np.clip(np.ceil(self.N ** (1 / 3)) * 4, 12, 48))
+        return (approx_cells_per_axis, approx_cells_per_axis, approx_cells_per_axis)
+
+    def _build_density_function(self, func_expr):
+        density_func = lambdify(("x", "y", "z"), func_expr, modules=["numpy"])
+
+        def wrapped(x, y, z):
+            values = density_func(x, y, z)
+            values = np.asarray(values, dtype=float)
+            if values.shape == ():
+                return np.full(np.shape(x), float(values), dtype=float)
+            return values
+
+        return wrapped
+
+    def _evaluate_density(self, density_func, x, y, z):
+        density = density_func(x, y, z)
+        density = np.asarray(density, dtype=float)
+        if density.shape != np.shape(x):
+            density = np.broadcast_to(density, np.shape(x)).astype(float)
+        if not np.all(np.isfinite(density)):
+            raise ValueError("Density function must return finite numeric values across the box")
+        if np.any(density < 0):
+            raise ValueError("Density function must be non-negative across the box")
+        return density
+
+    def _resolve_density_expr(self):
+        """Get and validate a symbolic density expression from file or user input."""
         while True:
             try:
-                func_str = input("Enter a custom probability density function Ρ(x,y,z){0 ≤ x,y,z ≤ 1}:\n")
-                # Parse the function string into a callable function
+                if self.func_expr_str:
+                    func_str = self.func_expr_str
+                else:
+                    func_str = input("Enter a custom probability density function P(x,y,z){0 <= x,y,z <= box limits}:\n")
+
                 func_expr = parse_expr(func_str, evaluate=False)
 
-                # Test the function with a sample point to ensure it works and returns a numeric value
-                test_density = np.float128(func_expr.subs({"x": self.len_X / 2, "y": self.len_Y / 2, "z": self.len_Z / 2}))
-                if not isinstance(test_density, (int, float, np.float128)):
-                    raise ValueError("Density function must return a numeric value")
-                # normalise function over volume of box
-                norm_const = 0
-                print("Calculating normalization constant for the custom density function...")
-                for _ in range(10000):  # Monte Carlo integration to find normalization constant
-                    x = np.random.uniform(0, self.len_X)
-                    y = np.random.uniform(0, self.len_Y)
-                    z = np.random.uniform(0, self.len_Z)
-                    norm_const += np.float128(func_expr.subs({"x": x, "y": y, "z": z}))
-                norm_const *= (self.len_X * self.len_Y * self.len_Z) / 10000
-                if norm_const == 0:
-                    raise ValueError("Density function cannot be zero everywhere")
-
-                break
+                test_density = float(func_expr.subs({"x": self.len_X / 2, "y": self.len_Y / 2, "z": self.len_Z / 2}))
+                if not np.isfinite(test_density):
+                    raise ValueError("Density function must return a finite numeric value")
+                return func_expr
             except Exception as e:
+                if self.func_expr_str:
+                    raise ValueError(f"Invalid gradient expression '{self.func_expr_str}': {e}") from e
                 print(f"Invalid function: {e}. Please try again.")
-        positions = np.zeros((self.N, 3))
-        for i in range(self.N):
-            while True:
-                x, y, z = np.random.rand(3)
-                if np.random.rand() < np.float128(func_expr.subs({"x": self.len_X / 2, "y": self.len_Y / 2, "z": self.len_Z / 2})) / norm_const:
-                    positions[i] = [x * self.len_X, y * self.len_Y, z * self.len_Z]
-                    break
+
+    def generate(self):
+        """Generate positions from a custom density using a vectorized cell sampler."""
+        func_expr = self._resolve_density_expr()
+        density_func = self._build_density_function(func_expr)
+
+        nx, ny, nz = self._grid_shape
+        dx = self.len_X / nx
+        dy = self.len_Y / ny
+        dz = self.len_Z / nz
+
+        x_centers = (np.arange(nx) + 0.5) * dx
+        y_centers = (np.arange(ny) + 0.5) * dy
+        z_centers = (np.arange(nz) + 0.5) * dz
+        grid_x, grid_y, grid_z = np.meshgrid(x_centers, y_centers, z_centers, indexing="ij")
+
+        density = self._evaluate_density(density_func, grid_x, grid_y, grid_z)
+        cell_weights = density.ravel()
+        total_weight = cell_weights.sum()
+        if total_weight <= 0:
+            raise ValueError("Density function must be positive somewhere inside the box")
+
+        probabilities = cell_weights / total_weight
+        chosen_cells = np.random.choice(cell_weights.size, size=self.N, p=probabilities)
+
+        ix, iy, iz = np.unravel_index(chosen_cells, (nx, ny, nz))
+        positions = np.empty((self.N, 3), dtype=float)
+        positions[:, 0] = (ix + np.random.rand(self.N)) * dx
+        positions[:, 1] = (iy + np.random.rand(self.N)) * dy
+        positions[:, 2] = (iz + np.random.rand(self.N)) * dz
         return positions
 
 
@@ -403,14 +452,14 @@ class Rayleigh_magnitude_L(AngularMomentum_dist_3D):
 
 
 def generate_positions(Current_Particles, Box_Params):
-    print(Current_Particles)
     N, pos_dist_type = Current_Particles[1], Current_Particles[7]
+    gradient_expr = Current_Particles[9] if len(Current_Particles) > 9 else None
     if pos_dist_type == 1:
         return Lattice_s(Box_Params, N).generate()
     elif pos_dist_type == 2:
         return Uniform_prob_density_s(Box_Params, N).generate()
     elif pos_dist_type == 3:
-        return Gradient_prob_density_s(Box_Params, N).generate()
+        return Gradient_prob_density_s(Box_Params, N, func_expr_str=gradient_expr).generate()
     else:
         raise ValueError(f"Invalid position distribution type: {pos_dist_type}")
 

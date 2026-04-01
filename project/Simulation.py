@@ -25,6 +25,9 @@ class simulation:
         self.Time_Params = Time_Params  # list of time parameters, will be used to determine the total run time and time step of the simulation
         self.volume = self.box_size[0] * self.box_size[1] * self.box_size[2]  # volume of the simulation box
         self.total_area = 2 * (self.box_size[0] * self.box_size[1] + self.box_size[1] * self.box_size[2] + self.box_size[2] * self.box_size[0])  # total surface area of the box
+        # Resolve output directory as an absolute path and create it immediately so saving never fails
+        self.save_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "plotted_graphs", self.sim_name)
+        os.makedirs(self.save_dir, exist_ok=True)
 
     def center_of_mass(self):
         """
@@ -45,15 +48,16 @@ class simulation:
         energy_dist_data,
         temp_dist_data,
         pressure_dist_data,
-        collision_count_data,
+        pp_collision_count_data,
+        wall_collision_count_data,
         pairwise_dist_data,
+        nearest_neighbor_dist_data=None,
         angular_momentum_dist_data=None,
         rotational_energy_dist_data=None,
         vibrational_energy_dist_data=None,
     ):
         # create graphs using the recorded data
-        save_dir = os.path.join(os.path.dirname(__file__), "plotted_graphs", self.sim_name)
-        os.makedirs(save_dir, exist_ok=True)
+        save_dir = self.save_dir  # absolute path created in __init__
         time_step = self.Time_Params[4] * {"ns": 1e-9, "mis": 1e-6, "ms": 1e-3, "s": 1}[self.Time_Params[5]]  # T_plt_s
         position_graph = Graphs.position_distribution(
             f"{self.sim_name} - Particle Radial Distance Distribution Over Time", x_axis="Particle Type", y_axis="Position", time_step=time_step
@@ -74,14 +78,38 @@ class simulation:
         pressure_graph = Graphs.pressure_distribution(f"{self.sim_name} - System Pressure (Ideal vs Impulse-Based)", x_axis="Particle Type", y_axis="Pressure", time_step=time_step)
         pressure_graph.save_dir = save_dir
         pressure_graph.plot(pressure_dist_data)
-        collision_graph = Graphs.collision_count(f"{self.sim_name} - Cumulative Collision Count Over Time", x_axis="Time", y_axis="Number of Collisions", time_step=time_step)
+        collision_data = {"pp": pp_collision_count_data, "wall": wall_collision_count_data}
+        collision_graph = Graphs.collision_count(
+            f"{self.sim_name} - Collision Count Per Sample Interval",
+            x_axis="Time",
+            y_axis="Number of Collisions",
+            time_step=time_step,
+        )
         collision_graph.save_dir = save_dir
-        collision_graph.plot(collision_count_data)
+        collision_graph.plot(collision_data)
+
+        cumulative_collision_graph = Graphs.cumulative_collision_count(
+            f"{self.sim_name} - Cumulative Collision Count Over Time",
+            x_axis="Time",
+            y_axis="Cumulative Number of Collisions",
+            time_step=time_step,
+        )
+        cumulative_collision_graph.save_dir = save_dir
+        cumulative_collision_graph.plot(collision_data)
         pairwise_graph = Graphs.pairwise_distance(
             f"{self.sim_name} - Pairwise Separation Distance Distribution", x_axis="Particle Type", y_axis="Pairwise Distance", time_step=time_step
         )
         pairwise_graph.save_dir = save_dir
         pairwise_graph.plot(pairwise_dist_data)
+        if nearest_neighbor_dist_data:
+            nn_graph = Graphs.nearest_neighbor_distance(
+                f"{self.sim_name} - Nearest Neighbour Distance Distribution Over Time",
+                x_axis="Time",
+                y_axis="Nearest Neighbour Distance",
+                time_step=time_step,
+            )
+            nn_graph.save_dir = save_dir
+            nn_graph.plot(nearest_neighbor_dist_data)
 
         # Plot angular momentum data if available
         if angular_momentum_dist_data is not None:
@@ -161,8 +189,10 @@ class simulation:
             "energy_dist_data": [],
             "temp_dist_data": [],
             "pressure_dist_data": [],
-            "collision_count_data": [],
+            "pp_collision_count_data": [],
+            "wall_collision_count_data": [],
             "pairwise_dist_data": [],
+            "nearest_neighbor_dist_data": [],
             "angular_momentum_dist_data": [],
             "rotational_energy_dist_data": [],
             "vibrational_energy_dist_data": [],
@@ -173,18 +203,11 @@ class simulation:
         self.particle_array.update_positions_vectorized(dt_s)
         self.particle_array.resolve_collisions_spatial(self.box_size)
 
-        for particle in self.All_particles:
-            particle.update_velocity(dt_s)
-
     def _compute_pairwise_distances(self):
         # Use vectorized computation for pairwise distances
-        self.particle_array.sync_from_particles()
         return self.particle_array.compute_pairwise_distances_vectorized()
 
     def _record_epoch_data(self, data, dt_recording):
-        # Sync particle array from individual particles for vectorized calculations
-        self.particle_array.sync_from_particles()
-
         # Use vectorized calculations for efficiency
         kinetic_energies = self.particle_array.compute_kinetic_energies_vectorized()
         temperatures = self.particle_array.compute_temperatures_vectorized()
@@ -196,13 +219,15 @@ class simulation:
         data["energy_dist_data"].append(kinetic_energies.tolist())
         data["temp_dist_data"].append(temperatures.tolist())
         data["pressure_dist_data"].append([[ideal_pressures[i], impulse_pressures[i]] for i in range(len(self.All_particles))])
-        data["collision_count_data"].append(self.particle_array.collision_counts.tolist())
+        data["pp_collision_count_data"].append(self.particle_array.pp_collision_counts.tolist())
+        data["wall_collision_count_data"].append(self.particle_array.wall_collision_counts.tolist())
 
         # Reset collision counts
         self.particle_array.reset_collision_counts_vectorized()
 
         data["pairwise_dist_data"].append(self._compute_pairwise_distances())
-        data["angular_momentum_dist_data"].append([particle.angular_momentum.copy() for particle in self.All_particles])
+        data["nearest_neighbor_dist_data"].append(self.particle_array.compute_nearest_neighbor_distances_vectorized())
+        data["angular_momentum_dist_data"].append(self.particle_array.angular_momenta.copy())
         data["rotational_energy_dist_data"].append(rotational_energies.tolist())
         data["vibrational_energy_dist_data"].append(vibrational_energies.tolist())
 
@@ -332,14 +357,22 @@ class simulation:
 
         data = self._initialize_data_buffers()
 
-        for epoch in range(epochs):
-            print(f"Epoch {epoch + 1} / {epochs}")
+        # Record initial state at t=0 so plotted sample times match data timestamps.
+        data["position_dist_data"].append(self.particle_array.positions.copy())
+        data["RMS_vel_dist_data"].append(self.particle_array.velocities.copy())
+        self._record_epoch_data(data, dt_recording)
+
+        for epoch in range(1, epochs + 1):
+            print(f"Epoch {epoch} / {epochs}")
             self._advance_particles_one_epoch(dt_s)
 
             if epoch % record_interval == 0:
-                data["position_dist_data"].append([p.position.copy() for p in self.All_particles])
-                data["RMS_vel_dist_data"].append([p.velocity.copy() for p in self.All_particles])
+                data["position_dist_data"].append(self.particle_array.positions.copy())
+                data["RMS_vel_dist_data"].append(self.particle_array.velocities.copy())
                 self._record_epoch_data(data, dt_recording)
+
+        # Keep particle objects consistent for any downstream non-vectorized usage.
+        self.particle_array.sync_to_particles()
 
         self._print_angular_momentum_summary(
             data["angular_momentum_dist_data"],
@@ -360,8 +393,10 @@ class simulation:
             energy_dist_data=data["energy_dist_data"],
             temp_dist_data=data["temp_dist_data"],
             pressure_dist_data=data["pressure_dist_data"],
-            collision_count_data=data["collision_count_data"],
+            pp_collision_count_data=data["pp_collision_count_data"],
+            wall_collision_count_data=data["wall_collision_count_data"],
             pairwise_dist_data=data["pairwise_dist_data"],
+            nearest_neighbor_dist_data=data["nearest_neighbor_dist_data"],
             angular_momentum_dist_data=data["angular_momentum_dist_data"],
             rotational_energy_dist_data=data["rotational_energy_dist_data"],
             vibrational_energy_dist_data=data["vibrational_energy_dist_data"],

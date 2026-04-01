@@ -34,7 +34,8 @@ for p in range(len(Sep_Particles)):
     temp = Sep_Particles[p][6]
     pos_dist_type = Sep_Particles[p][7]
     vel_dist_type = Sep_Particles[p][8]
-    current_particle = [particle_type, N, mass, degrees, inertia_data, radius, temp, pos_dist_type, vel_dist_type]
+    gradient_expr = Sep_Particles[p][9] if len(Sep_Particles[p]) > 9 else None
+    current_particle = [particle_type, N, mass, degrees, inertia_data, radius, temp, pos_dist_type, vel_dist_type, gradient_expr]
     positions = DIST.generate_positions(current_particle, Box_Params)
     velocities = DIST.generate_velocities(current_particle)
 
@@ -59,7 +60,9 @@ if init_file:
     if sim_name.lower().endswith(".txt"):
         sim_name = sim_name[:-4]  # remove .txt extension
 else:
-    raise ValueError("No simulation name found. Please set a name during initialisation or provide an initialisation file with a name.")
+    sim_name = input("Enter a name for this simulation run: ").strip()
+    if not sim_name:
+        sim_name = "unnamed_simulation"
 
 my_simulation = SIMU.simulation(sim_name, box_params=Box_Params, All_particles=All_particles, Time_Params=Time_Params)
 print(f"Running simulation: {sim_name}")

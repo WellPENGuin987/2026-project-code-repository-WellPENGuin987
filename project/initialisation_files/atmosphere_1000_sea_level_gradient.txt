@@ -1,0 +1,18 @@
+# 1000-particle dry atmosphere at ~sea-level number density (300 K)
+# Composition by count (approx natural dry air): N2=781, O2=209, Ar=9, CO2=1
+# Box side chosen from n0 ~= 2.5e25 m^-3 => L ~= (N/n0)^(1/3) ~= 34.2 nm
+# Position distribution type 3 = custom gradient (you will be prompted for the function)
+# Suggested function to enter for each species prompt: exp(-z/8.5)
+# (z is in the same length units as the box here, i.e. nm)
+
+# Box parameters: Len_X,Units_X,Len_Y,Units_Y,Len_Z,Units_Z
+34.2,nm,34.2,nm,34.2,nm
+# Time parameters: Time,Units_Time,dt,Units_dt,T_plt,Units_T_plt
+20.0,ns,0.001,ns,0.5,ns
+# Seed for random number generator
+3026001
+# Particle lines: type,N,m(Da),D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes,gradient_expr
+N2,781,28.014,5,1.70,300.0,3,3,8.47,8.47,8.47,,exp(-z/8.5)
+O2,209,31.998,5,1.52,300.0,3,3,11.60,11.60,11.60,,exp(-z/8.5)
+Ar,9,39.948,3,1.88,300.0,3,3,0.0,0.0,0.0,,exp(-z/8.5)
+CO2,1,44.0095,5,1.90,300.0,3,3,43.00,43.00,43.00,,exp(-z/8.5)

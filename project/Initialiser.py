@@ -66,9 +66,12 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, filename=None)
         f.write(",".join([str(Time_Params[0]), str(Time_Params[1]), str(Time_Params[2]), str(Time_Params[3]), str(Time_Params[4]), str(Time_Params[5])]) + "\n")
         f.write("# Seed for random number generator\n")
         f.write(str(seed) + "\n")
-        f.write("# Particle lines: type,N,m(Da),D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes\n")
+        f.write("# Particle lines: type,N,m(Da),D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes,gradient_expr\n")
         for p in Sep_Particles:
             vib_str = ",".join(map(str, p[4]["vibrational_modes"]))
+            gradient_expr = ""
+            if len(p) > 9 and p[9] is not None:
+                gradient_expr = str(p[9])
             f.write(
                 ",".join(
                     [
@@ -84,6 +87,7 @@ def SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, filename=None)
                         str(p[4]["moments_of_inertia"][1]),
                         str(p[4]["moments_of_inertia"][2]),
                         vib_str,
+                        gradient_expr,
                     ]
                 )
                 + "\n"
@@ -168,8 +172,8 @@ def _parse_init_file(fullpath):
     Sep_Particles = []
     for line in lines[3:]:
         part_items = [item.strip() for item in line.split(",")]
-        if len(part_items) != 12:
-            raise ValueError("Particle lines must have 12 values: type,N,m,D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes")
+        if len(part_items) not in [12, 13]:
+            raise ValueError("Particle lines must have 12 or 13 values: type,N,m,D,r,Temp,Pos_dist,Vel_dist,I_x,I_y,I_z,vib_modes[,gradient_expr]")
         p_type = part_items[0]
         p_N = int(part_items[1])
         p_m = np.longdouble(str(part_items[2]))
@@ -184,13 +188,14 @@ def _parse_init_file(fullpath):
         I_z = np.longdouble(str(part_items[10]))
         vib_str = part_items[11]
         vib_modes = [np.longdouble(x.strip()) for x in vib_str.split(",") if x.strip()] if vib_str else []
+        gradient_expr = part_items[12] if len(part_items) == 13 and part_items[12] != "" else None
 
         inertia_data = {
             "degrees": p_D,
             "moments_of_inertia": [I_x, I_y, I_z],
             "vibrational_modes": vib_modes,
         }
-        Sep_Particles.append([p_type, p_N, p_m, p_D, inertia_data, p_r, p_temp, p_pos, p_vel])
+        Sep_Particles.append([p_type, p_N, p_m, p_D, inertia_data, p_r, p_temp, p_pos, p_vel, gradient_expr])
 
     return Box_Params, Time_Params, Sep_Particles, seed
 
@@ -444,6 +449,12 @@ def InitialiseParticles():
                 Current_Particles.append(np.longdouble(str(Init_Particles[5])))  # initial temperature
                 Current_Particles.append(setPosDistType(int(Init_Particles[6])))  # position distribution type
                 Current_Particles.append(setVelDistType(int(Init_Particles[7])))  # velocity distribution type
+                gradient_expr = None
+                if Current_Particles[7] == 3:
+                    gradient_expr = input("Custom gradient expression in x,y,z (blank to prompt during sampling), e.g. exp(-z/8.5):\n").strip()
+                    if gradient_expr == "":
+                        gradient_expr = None
+                Current_Particles.append(gradient_expr)
 
                 Sep_Particles.append(Current_Particles)  # add current particle parameters to list of all particle parameters
 
@@ -496,5 +507,6 @@ def Initialise():
         SaveInputToFile(Box_Params, Time_Params, Sep_Particles, seed, init_file)
     else:
         print("Auto-save disabled by user.")
+        init_file = None
 
     return (Box_Params, Time_Params, Sep_Particles, seed, init_file)

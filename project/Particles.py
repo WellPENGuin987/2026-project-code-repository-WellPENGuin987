@@ -125,7 +125,25 @@ class ParticleArray:
 
         self.impulse_accums = np.array([p.impulse_accum for p in All_particles], dtype=float)
         self.collision_counts = np.array([p.collision_count for p in All_particles], dtype=int)
+        self.pp_collision_counts = np.zeros(self.n_particles, dtype=int)
+        self.wall_collision_counts = np.zeros(self.n_particles, dtype=int)
         self._cell_size = max(1e-12, 2.0 * float(np.max(self.radii)) if self.n_particles else 1.0)
+        self._neighbor_offsets = [
+            (0, 0, 0),
+            (1, -1, -1),
+            (1, -1, 0),
+            (1, -1, 1),
+            (1, 0, -1),
+            (1, 0, 0),
+            (1, 0, 1),
+            (1, 1, -1),
+            (1, 1, 0),
+            (1, 1, 1),
+            (0, 1, -1),
+            (0, 1, 0),
+            (0, 1, 1),
+            (0, 0, 1),
+        ]
 
     def _cell_index(self, position, box_size):
         """Return integer cell coordinates for a position within the simulation box."""
@@ -142,13 +160,11 @@ class ParticleArray:
             cells[cell].append(i)
         return cells
 
-    def _neighbor_cells(self, cell):
-        """Generate all 27 neighboring cells (including the cell itself)."""
+    def _neighbor_cells_half_stencil(self, cell):
+        """Generate a half-stencil of neighboring cells to avoid duplicate pair checks."""
         cx, cy, cz = cell
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    yield (cx + dx, cy + dy, cz + dz)
+        for dx, dy, dz in self._neighbor_offsets:
+            yield (cx + dx, cy + dy, cz + dz)
 
     def _resolve_pair_collision(self, i, j):
         """Resolve an elastic collision between particles i and j if they overlap."""
@@ -171,23 +187,28 @@ class ParticleArray:
         self.velocities[j] = v2 - factor_2 * (-delta)
         self.collision_counts[i] += 1
         self.collision_counts[j] += 1
+        self.pp_collision_counts[i] += 1
+        self.pp_collision_counts[j] += 1
 
     def _resolve_neighbor_collisions(self, cells):
         """Resolve all candidate pair collisions from neighboring cell lists."""
-        checked_pairs = set()
         for cell, indices in cells.items():
-            for neighbor in self._neighbor_cells(cell):
+            # Intra-cell pairs (j > i) handled once.
+            n_local = len(indices)
+            for a in range(n_local - 1):
+                i = indices[a]
+                for b in range(a + 1, n_local):
+                    self._resolve_pair_collision(i, indices[b])
+
+            # Inter-cell pairs handled with half-stencil to avoid duplicates.
+            for neighbor in self._neighbor_cells_half_stencil(cell):
+                if neighbor == cell:
+                    continue
                 neighbor_indices = cells.get(neighbor)
                 if neighbor_indices is None:
                     continue
                 for i in indices:
                     for j in neighbor_indices:
-                        if i >= j:
-                            continue
-                        pair = (i, j)
-                        if pair in checked_pairs:
-                            continue
-                        checked_pairs.add(pair)
                         self._resolve_pair_collision(i, j)
 
     def _apply_wall_collisions(self, box_size):
@@ -203,6 +224,7 @@ class ParticleArray:
             self.velocities[hit, axis] *= -1.0
             self.impulse_accums[hit] += 2.0 * self.masses[hit] * np.abs(old_v)
             self.collision_counts[hit] += 1
+            self.wall_collision_counts[hit] += 1
 
     def resolve_collisions_spatial(self, box_size):
         """Resolve collisions using a cell-list broad phase plus exact pair checks."""
@@ -212,8 +234,6 @@ class ParticleArray:
         cells = self._build_spatial_cells(box_size)
         self._resolve_neighbor_collisions(cells)
         self._apply_wall_collisions(box_size)
-
-        self.sync_to_particles()
 
     def sync_from_particles(self):
         """Sync arrays from particle objects (for non-vectorized operations)."""
@@ -235,9 +255,6 @@ class ParticleArray:
     def update_positions_vectorized(self, dt):
         """Vectorized position update: x += v * dt."""
         self.positions += self.velocities * dt
-        # Sync back to particle objects
-        for i, p in enumerate(self.All_particles):
-            p.position[:] = self.positions[i]
 
     def compute_kinetic_energies_vectorized(self):
         """Vectorized kinetic energy calculation for all particles."""
@@ -268,18 +285,66 @@ class ParticleArray:
         return n_vib_modes * k_B * temperatures
 
     def compute_pairwise_distances_vectorized(self):
-        """Vectorized pairwise distance calculation using broadcasting."""
-        # Compute all pairwise distances efficiently using broadcasting
-        # Shape: (n_particles, n_particles) -> distances[i, j] = distance from particle i to j
-        p_expanded_i = self.positions[:, np.newaxis, :]  # (n, 1, 3)
-        p_expanded_j = self.positions[np.newaxis, :, :]  # (1, n, 3)
-        differences = p_expanded_i - p_expanded_j  # (n, n, 3)
-        distances_sq = np.sum(differences**2, axis=2)  # (n, n)
-        distances = np.sqrt(distances_sq)
+        """Compute pairwise distances without allocating a full NxN matrix."""
+        n = self.n_particles
+        if n < 2:
+            return np.array([], dtype=float)
 
-        # Extract upper triangle (i < j) to match original behavior
-        upper_tri_indices = np.triu_indices(self.n_particles, k=1)
-        return distances[upper_tri_indices]
+        distances = []
+        block_size = 256
+        for i_start in range(0, n, block_size):
+            i_end = min(n, i_start + block_size)
+            block_i = self.positions[i_start:i_end]
+
+            # Within-block upper triangle.
+            diffs_ii = block_i[:, np.newaxis, :] - block_i[np.newaxis, :, :]
+            dists_ii = np.sqrt(np.sum(diffs_ii * diffs_ii, axis=2))
+            tri_i, tri_j = np.triu_indices(i_end - i_start, k=1)
+            if tri_i.size:
+                distances.append(dists_ii[tri_i, tri_j])
+
+            # Cross-block full pairs with later blocks.
+            for j_start in range(i_end, n, block_size):
+                j_end = min(n, j_start + block_size)
+                block_j = self.positions[j_start:j_end]
+                diffs_ij = block_i[:, np.newaxis, :] - block_j[np.newaxis, :, :]
+                dists_ij = np.sqrt(np.sum(diffs_ij * diffs_ij, axis=2))
+                distances.append(dists_ij.ravel())
+
+        if not distances:
+            return np.array([], dtype=float)
+        return np.concatenate(distances)
+
+    def compute_nearest_neighbor_distances_vectorized(self):
+        """Return the distance from each particle to its nearest neighbour."""
+        n = self.n_particles
+        if n < 2:
+            return np.zeros(n, dtype=float)
+
+        nearest = np.full(n, np.inf, dtype=float)
+        block_size = 256
+        for i_start in range(0, n, block_size):
+            i_end = min(n, i_start + block_size)
+            block_i = self.positions[i_start:i_end]  # (bi, 3)
+
+            for j_start in range(0, n, block_size):
+                j_end = min(n, j_start + block_size)
+                block_j = self.positions[j_start:j_end]  # (bj, 3)
+
+                # (bi, bj) distance matrix
+                diffs = block_i[:, np.newaxis, :] - block_j[np.newaxis, :, :]  # (bi, bj, 3)
+                dists = np.sqrt(np.sum(diffs * diffs, axis=2))  # (bi, bj)
+
+                # Mask self-distances (same global index)
+                for local_i in range(i_end - i_start):
+                    for local_j in range(j_end - j_start):
+                        if i_start + local_i == j_start + local_j:
+                            dists[local_i, local_j] = np.inf
+
+                nearest[i_start:i_end] = np.minimum(nearest[i_start:i_end], dists.min(axis=1))
+
+        nearest[nearest == np.inf] = 0.0
+        return nearest
 
     def compute_ideal_pressures_vectorized(self, volume):
         """Vectorized ideal gas pressure calculation."""
@@ -290,12 +355,10 @@ class ParticleArray:
         """Vectorized impulse-based pressure calculation."""
         pressures = self.impulse_accums / (6 * area * dt)
         self.impulse_accums[:] = 0  # Reset after computing
-        for i, p in enumerate(self.All_particles):
-            p.impulse_accum = 0
         return pressures
 
     def reset_collision_counts_vectorized(self):
         """Reset all collision counts."""
         self.collision_counts[:] = 0
-        for p in self.All_particles:
-            p.collision_count = 0
+        self.pp_collision_counts[:] = 0
+        self.wall_collision_counts[:] = 0
